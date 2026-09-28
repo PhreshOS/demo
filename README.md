@@ -88,6 +88,18 @@ npm run verify
 npm run build:manager
 ```
 
+The manager runs under the same rootless Docker it starts desktops in, on the
+desktops' network so it can reach them:
+
+```sh
+docker run -d --name phresh-demo-manager --restart unless-stopped \
+  --network phresh-demo \
+  --publish 127.0.0.1:18000:8080 \
+  --volume <state-directory>:/data \
+  --volume <rootless-docker-socket>:/var/run/docker.sock \
+  phreshos/demo-manager:<revision>
+```
+
 `Caddyfile` terminates origin HTTPS for the entry and issued desktop hostnames,
 then forwards HTTP and WebSocket traffic to the manager on `127.0.0.1:18000`.
 
