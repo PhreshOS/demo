@@ -4,13 +4,13 @@ import { desktopHostname, validDesktopHostname } from "./session-host.mjs"
 import { createToken, validToken } from "./session-token.mjs"
 
 export default class Sessions {
-  constructor({ docker, image, network, domain, statePath, idleMilliseconds, maxSessions, now = Date.now }) {
+  constructor({ docker, image, network, domain, statePath, lifetimeMilliseconds, maxSessions, now = Date.now }) {
     this.docker = docker
     this.image = image
     this.network = network
     this.domain = domain
     this.statePath = statePath
-    this.idleMilliseconds = idleMilliseconds
+    this.lifetimeMilliseconds = lifetimeMilliseconds
     this.maxSessions = maxSessions
     this.now = now
     this.records = new Map()
@@ -42,8 +42,7 @@ export default class Sessions {
         containerName: container.Names?.[0]?.replace(/^\//, "") ?? this.name(token),
         status: "ready",
         createdAt: previous?.createdAt ?? this.now(),
-        lastActive: this.now(),
-        connections: 0,
+        expiresAt: previous?.expiresAt ?? (previous?.createdAt ?? this.now()) + this.lifetimeMilliseconds,
         pending: null
       })
     }
@@ -68,15 +67,16 @@ export default class Sessions {
     do {
       hostname = desktopHostname(token, this.domain, attempt++)
     } while (this.hostnames.has(hostname))
+    const createdAt = this.now()
     const record = {
       token,
       hostname,
       containerId: null,
       containerName: this.name(token),
       status: "container",
-      createdAt: this.now(),
-      lastActive: this.now(),
-      connections: 0,
+      createdAt,
+      // A desktop lives a fixed time from its creation, whether or not anyone is connected.
+      expiresAt: createdAt + this.lifetimeMilliseconds,
       pending: null
     }
     this.add(record)
@@ -100,24 +100,10 @@ export default class Sessions {
     for (const listener of this.watchers.get(record) ?? []) listener(record)
   }
 
-  touch(record) {
-    record.lastActive = this.now()
-  }
-
-  connected(record) {
-    record.connections += 1
-    this.touch(record)
-  }
-
-  disconnected(record) {
-    record.connections = Math.max(0, record.connections - 1)
-    this.touch(record)
-    void this.persist()
-  }
-
-  async expireIdle() {
-    const deadline = this.now() - this.idleMilliseconds
-    const expired = [...this.records.values()].filter(record => record.connections === 0 && record.lastActive <= deadline)
+  /** Removes every desktop whose lifetime has ended. */
+  async expire() {
+    const now = this.now()
+    const expired = [...this.records.values()].filter(record => record.expiresAt <= now)
     for (const record of expired) await this.remove(record)
     return expired.length
   }
@@ -138,7 +124,7 @@ export default class Sessions {
       containerName: record.containerName,
       status: record.status,
       createdAt: record.createdAt,
-      lastActive: record.lastActive
+      expiresAt: record.expiresAt
     }]))
     this.saving = this.saving.then(async () => {
       await mkdir(dirname(this.statePath), { recursive: true })
@@ -155,7 +141,9 @@ export default class Sessions {
         token: record.token,
         name: record.containerName,
         image: this.image,
-        network: this.network
+        network: this.network,
+        startedAt: record.createdAt,
+        expiresAt: record.expiresAt
       })
       this.setStatus(record, "system")
       await this.persist()

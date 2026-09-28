@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process"
-import { access, chmod, rm, writeFile } from "node:fs/promises"
+import { access, chmod, mkdir, rm, writeFile } from "node:fs/promises"
 import { createServer } from "node:net"
 import { pathToFileURL } from "node:url"
 
@@ -7,9 +7,11 @@ const seed = "/usr/local/share/phreshos-demo/machine-seed.tar"
 const seeded = "/var/lib/phreshos/.demo-machine-seeded"
 export const machineSocket = "/run/phreshos-demo-machine.sock"
 const realCli = "/usr/local/bin/phresh"
+export const demoFile = "/etc/phreshos/demo.json"
 
-export async function runMachine({ provision = provisionMachine, command = phresh, supervise = createSupervisor, shutdown = waitForShutdown } = {}) {
+export async function runMachine({ provision = provisionMachine, announce = announceLifetime, command = phresh, supervise = createSupervisor, shutdown = waitForShutdown } = {}) {
   await provision()
+  await announce()
   const supervisor = await supervise()
   let started = false
 
@@ -21,6 +23,19 @@ export async function runMachine({ provision = provisionMachine, command = phres
     await supervisor.close()
     if (started) await command(["system", "stop"])
   }
+}
+
+/**
+ * Writes the lifetime the manager gave this machine where Programs can read it, read-only. It only
+ * informs: the manager ends the machine on time whatever becomes of this file.
+ */
+export async function announceLifetime(environment = process.env, file = demoFile) {
+  const startedAt = environment.PHRESHOS_DEMO_STARTED_AT
+  const expiresAt = environment.PHRESHOS_DEMO_EXPIRES_AT
+  if (!startedAt || !expiresAt || Number.isNaN(Date.parse(startedAt)) || Number.isNaN(Date.parse(expiresAt))) return
+  await mkdir(file.slice(0, file.lastIndexOf("/")), { recursive: true })
+  await rm(file, { force: true })
+  await writeFile(file, `${JSON.stringify({ startedAt, expiresAt })}\n`, { mode: 0o444 })
 }
 
 async function provisionMachine() {

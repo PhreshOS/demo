@@ -38,3 +38,26 @@ test("a failed boot does not pretend that a System service was started", async (
 
   assert.equal(waited, false)
 })
+
+test("the machine writes the lifetime it was given where Programs read it, read-only", async () => {
+  const { mkdtemp, readFile, stat, rm: remove } = await import("node:fs/promises")
+  const { tmpdir } = await import("node:os")
+  const { join } = await import("node:path")
+  const { announceLifetime } = await import("../source/machine.mjs")
+  const directory = await mkdtemp(join(tmpdir(), "phresh-demo-machine-"))
+  const file = join(directory, "phreshos", "demo.json")
+  try {
+    await announceLifetime({ PHRESHOS_DEMO_STARTED_AT: "2026-09-28T08:00:00.000Z", PHRESHOS_DEMO_EXPIRES_AT: "2026-09-28T09:00:00.000Z" }, file)
+    assert.deepEqual(JSON.parse(await readFile(file, "utf8")), { startedAt: "2026-09-28T08:00:00.000Z", expiresAt: "2026-09-28T09:00:00.000Z" })
+    assert.equal((await stat(file)).mode & 0o777, 0o444)
+    // Written again at the next boot, even though it is read-only.
+    await announceLifetime({ PHRESHOS_DEMO_STARTED_AT: "2026-09-28T08:00:00.000Z", PHRESHOS_DEMO_EXPIRES_AT: "2026-09-28T10:00:00.000Z" }, file)
+    assert.equal(JSON.parse(await readFile(file, "utf8")).expiresAt, "2026-09-28T10:00:00.000Z")
+    // Without a lifetime, there is no file: an ordinary machine.
+    const plain = join(directory, "plain.json")
+    await announceLifetime({}, plain)
+    await assert.rejects(stat(plain))
+  } finally {
+    await remove(directory, { recursive: true, force: true })
+  }
+})

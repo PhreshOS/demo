@@ -4,19 +4,21 @@ import { configuration } from "./configuration.mjs"
 import Docker from "./docker.mjs"
 import createHandler from "./handler.mjs"
 import Sessions from "./sessions.mjs"
+import Images from "./images.mjs"
 import { demoPage, unavailable } from "./pages.mjs"
 import { proxyUpgrade } from "./proxy.mjs"
 import { requestHostname } from "./session-host.mjs"
 
 const config = configuration()
 const docker = new Docker(config.socket)
+const images = new Images({ docker, repository: config.repository, root: new URL("..", import.meta.url).pathname })
 const sessions = new Sessions({
   docker,
-  image: config.image,
+  image: `${config.repository}:current`,
   network: config.network,
   domain: config.sessionDomain,
   statePath: config.state,
-  idleMilliseconds: config.idleMilliseconds,
+  lifetimeMilliseconds: config.lifetimeMilliseconds,
   maxSessions: config.maxSessions
 })
 
@@ -46,23 +48,27 @@ server.on("upgrade", (request, socket, head) => {
   }
   upgraded.add(socket)
   socket.on("close", () => upgraded.delete(socket))
-  proxyUpgrade(request, socket, head, record, {
-    connected: () => sessions.connected(record),
-    disconnected: () => sessions.disconnected(record)
-  })
+  proxyUpgrade(request, socket, head, record)
 })
 
 server.listen(config.port, config.host, () => {
   console.log(`PhreshOS demo manager listening on http://${config.host}:${config.port}`)
 })
 
-const cleanup = setInterval(() => void sessions.expireIdle().catch(error => console.error(error)), 30_000)
+const cleanup = setInterval(() => void sessions.expire().catch(error => console.error(error)), 5_000)
 cleanup.unref()
 
 for (const signal of ["SIGINT", "SIGTERM"]) process.once(signal, () => void shutdown())
 
+// Every release reaches the demo on its own: the image follows the latest CLI, System, and Sprout.
+const checkImage = () => void images.refresh().catch(error => console.error("The demo image could not be refreshed:", error))
+checkImage()
+const imageCheck = setInterval(checkImage, config.imageCheckMilliseconds)
+imageCheck.unref()
+
 async function shutdown() {
   clearInterval(cleanup)
+  clearInterval(imageCheck)
   for (const socket of upgraded) socket.destroy()
   await new Promise(resolve => server.close(resolve))
   await sessions.persist()

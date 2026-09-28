@@ -26,10 +26,11 @@ export default function createHandler({ config, sessions, page }) {
 
     const record = sessions.getByHostname(hostname)
     if (!record) {
-      send(response, 404, unavailable("This desktop link is invalid or has ended."))
+      // A desktop that has ended sends its visitor back to start a new one, told why.
+      if (request.method === "GET" && url.pathname === "/") redirectTo(response, `https://${config.entryHost}/?ended`)
+      else send(response, 404, unavailable("This desktop link is invalid or has ended."))
       return
     }
-    sessions.touch(record)
 
     if (record.pending) {
       await record.pending
@@ -41,7 +42,7 @@ export default function createHandler({ config, sessions, page }) {
       return
     }
 
-    proxyRequest(request, response, record, { onActivity: () => sessions.touch(record) })
+    proxyRequest(request, response, record)
   }
 
   async function handleEntry(request, response, url) {
@@ -122,6 +123,11 @@ function progress(record) {
 function sendProgress(response, status, lines) {
   response.writeHead(status, { "content-type": "application/x-ndjson", "cache-control": "no-store" })
   response.end(lines.map(line => `${JSON.stringify(line)}\n`).join(""))
+}
+
+function redirectTo(response, location) {
+  response.writeHead(302, { location, "cache-control": "no-store" })
+  response.end()
 }
 
 function redirect(response, hostname, status = 302) {

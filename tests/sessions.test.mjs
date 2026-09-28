@@ -7,7 +7,7 @@ import Sessions from "../source/sessions.mjs"
 import { desktopHostname } from "../source/session-host.mjs"
 import { createToken } from "../source/session-token.mjs"
 
-test("a disconnected desktop expires only after its idle lifetime", async () => {
+test("a desktop ends a fixed time after its creation, connected or not", async () => {
   const directory = await mkdtemp(join(tmpdir(), "phresh-demo-sessions-"))
   let now = 1_000
   const stopped = []
@@ -19,7 +19,7 @@ test("a disconnected desktop expires only after its idle lifetime", async () => 
     async stop(id) { stopped.push(id) }
   }
   try {
-    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath: join(directory, "state.json"), idleMilliseconds: 3_600_000, maxSessions: 1, now: () => now })
+    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath: join(directory, "state.json"), lifetimeMilliseconds: 3_600_000, maxSessions: 1, now: () => now })
     await sessions.initialize()
     const token = createToken()
     const record = sessions.create(token)
@@ -30,15 +30,11 @@ test("a disconnected desktop expires only after its idle lifetime", async () => 
     assert.equal(record.status, "ready")
     assert.equal(sessions.create(), null)
 
-    sessions.connected(record)
-    now += 7_200_000
-    assert.equal(await sessions.expireIdle(), 0)
-
-    sessions.disconnected(record)
+    assert.equal(record.expiresAt, 1_000 + 3_600_000)
     now += 3_599_999
-    assert.equal(await sessions.expireIdle(), 0)
+    assert.equal(await sessions.expire(), 0)
     now += 1
-    assert.equal(await sessions.expireIdle(), 1)
+    assert.equal(await sessions.expire(), 1)
     assert.equal(sessions.getByHostname(record.hostname), null)
     assert.deepEqual(stopped, ["container"])
   } finally {
@@ -56,7 +52,7 @@ test("a starting desktop reports its container, then its System, then ready", as
     async stop() {}
   }
   try {
-    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath: join(directory, "state.json"), idleMilliseconds: 3_600_000, maxSessions: 1 })
+    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath: join(directory, "state.json"), lifetimeMilliseconds: 3_600_000, maxSessions: 1 })
     await sessions.initialize()
     const record = sessions.create(createToken())
     const seen = [record.status]
@@ -80,7 +76,7 @@ test("a restored desktop keeps its issued hostname", async () => {
     async listDesktops() { return [{ Id: "container", State: "running", Labels: { "phreshos.demo.session": token }, Names: ["/desktop"] }] }
   }
   try {
-    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath, idleMilliseconds: 3_600_000, maxSessions: 5 })
+    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath, lifetimeMilliseconds: 3_600_000, maxSessions: 5 })
     await sessions.initialize()
     assert.equal(sessions.getByHostname(issued)?.token, token)
     assert.equal(JSON.parse(await readFile(statePath, "utf8"))[token].hostname, issued)
@@ -99,7 +95,7 @@ test("an invalid saved hostname cannot become a desktop route", async () => {
     async listDesktops() { return [{ Id: "container", State: "running", Labels: { "phreshos.demo.session": token }, Names: ["/desktop"] }] }
   }
   try {
-    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath, idleMilliseconds: 3_600_000, maxSessions: 5 })
+    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath, lifetimeMilliseconds: 3_600_000, maxSessions: 5 })
     await sessions.initialize()
     assert.equal(sessions.getByHostname("unissued.phreshos.com"), null)
     assert.equal(sessions.get(token)?.hostname, desktopHostname(token, "phreshos.com"))
@@ -117,7 +113,7 @@ test("a short hostname collision chooses another identifier", async () => {
     async inspect() { return { State: { Running: true, Health: { Status: "healthy" } } } }
   }
   try {
-    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath: join(directory, "state.json"), idleMilliseconds: 3_600_000, maxSessions: 5 })
+    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath: join(directory, "state.json"), lifetimeMilliseconds: 3_600_000, maxSessions: 5 })
     await sessions.initialize()
     const token = createToken()
     const occupied = desktopHostname(token, "phreshos.com")

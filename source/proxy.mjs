@@ -6,7 +6,7 @@ const hopByHop = new Set([
   "te", "trailer", "transfer-encoding", "upgrade"
 ])
 
-export function proxyRequest(request, response, session, { onActivity }) {
+export function proxyRequest(request, response, session) {
   const headers = requestHeaders(request)
   const upstream = http.request({
     hostname: session.containerName,
@@ -23,11 +23,10 @@ export function proxyRequest(request, response, session, { onActivity }) {
     if (!response.headersSent) response.writeHead(502, { "content-type": "text/plain; charset=utf-8" })
     response.end(`The desktop is unavailable: ${error.message}`)
   })
-  request.on("data", onActivity)
   request.pipe(upstream)
 }
 
-export function proxyUpgrade(request, socket, head, session, { connected, disconnected }) {
+export function proxyUpgrade(request, socket, head, session) {
   const upstream = http.request({
     hostname: session.containerName,
     port: 4300,
@@ -44,15 +43,9 @@ export function proxyUpgrade(request, socket, head, session, { connected, discon
     socket.write("\r\n")
     if (targetHead.length) socket.write(targetHead)
     if (head.length) target.write(head)
-    connected()
-    let ended = false
-    const close = () => {
-      if (ended) return
-      ended = true
-      disconnected()
-    }
-    socket.on("close", close)
-    target.on("close", close)
+    // Either side closing ends the other.
+    socket.on("close", () => target.destroy())
+    target.on("close", () => socket.destroy())
     socket.pipe(target).pipe(socket)
   })
 

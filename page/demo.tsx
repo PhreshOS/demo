@@ -13,8 +13,11 @@ type Progress =
 function Demo() {
   const [progress, setProgress] = useState<Progress>({ status: "container" })
   const [attempt, setAttempt] = useState(0)
+  // A visitor whose desktop has ended arrives here told so, and starts a new one only when they choose.
+  const [ended, setEnded] = useState(() => new URLSearchParams(location.search).has("ended"))
 
   useEffect(() => {
+    if (ended) return
     const controller = new AbortController()
     setProgress({ status: "container" })
     void follow(controller.signal, next => {
@@ -24,7 +27,20 @@ function Demo() {
       if (!controller.signal.aborted) setProgress({ status: "failed" })
     })
     return () => controller.abort()
-  }, [attempt])
+  }, [attempt, ended])
+
+  if (ended) {
+    return <Page>
+      <Flex direction="column" align="center" gap="medium" style={{ textAlign: "center" }}>
+        <Heading level={1} size="large">Your demo has returned to seed.</Heading>
+        <Text tone="secondary">Its time is up, and everything in it is gone.</Text>
+        <Button color="primary" onPress={() => {
+          history.replaceState(null, "", "/")
+          setEnded(false)
+        }}>Plant a new one</Button>
+      </Flex>
+    </Page>
+  }
 
   if (progress.status === "failed" || progress.status === "full") {
     return <Page>
@@ -45,7 +61,7 @@ function Demo() {
       <Step ready={false} message="Opening your desktop" />
     </Loading>
     <Text tone="secondary" size="small" style={{ position: "absolute", insetInline: 0, bottom: "2em", textAlign: "center" }}>
-      This desktop is yours for now. It is cleared an hour after you leave, so keep private things out of it.
+      This desktop is yours for an hour, then it is cleared. Nothing in it is kept, so keep private things out of it.
     </Text>
   </Page>
 }

@@ -124,3 +124,14 @@ function captureResponse() {
     }
   }
 }
+
+test("opening a desktop that has ended goes back to the entry, told why", async () => {
+  const sessions = { getByHostname: () => null }
+  const response = captureResponse()
+  await createHandler({ config: { entryHost: "demo.phreshos.com" }, sessions, page })(
+    { url: "/", method: "GET", headers: { host: "demo-abc1234.phreshos.com" } }, response
+  )
+
+  assert.equal(response.status, 302)
+  assert.equal(response.headers.location, "https://demo.phreshos.com/?ended")
+})

@@ -24,6 +24,16 @@ docker build \
   .
 ```
 
+The manager builds this image itself. Every ten minutes
+(`DEMO_IMAGE_CHECK_MILLISECONDS`) it reads the latest CLI from npm and the
+latest System and Sprout releases from GitHub. When any has changed, it builds
+`phreshos/demo:<system>-sprout<sprout>-cli<cli>`, runs it once as a desktop
+until its System answers, and only then points `phreshos/demo:current` at it.
+New desktops start from `current`, so each release reaches the demo without any
+change here, and a release whose image does not come up never does. Desktops
+already running keep the image they started from; older images are removed once
+nothing uses them.
+
 The image listens on port `4300`. The CLI, installed System, registered
 service, Programs, and `PHRESHOS_HOME` all live inside the container's writable
 layer. The container is the disposable machine: stopping the System leaves that
@@ -62,9 +72,16 @@ exposing the entry host's browser-session cookie to the desktop. Crawl robots
 are excluded from the entry and issued hostnames through their shared
 `robots.txt` response.
 
-HTTP and WebSocket traffic is proxied to the session's container. A desktop is
-removed one hour after its final live connection ends. The manager recovers
-running containers after its own restart and limits concurrent sessions.
+HTTP and WebSocket traffic is proxied to the session's container. A desktop
+lives a fixed time from its creation, one hour by default
+(`DEMO_LIFETIME_MILLISECONDS`), whether or not anyone is connected, and is
+removed when that time ends. The manager passes the machine its start and end
+as `PHRESHOS_DEMO_STARTED_AT` and `PHRESHOS_DEMO_EXPIRES_AT`; the machine writes
+them to `/etc/phreshos/demo.json`, where Sprout finds them and shows the time
+left. The file only informs: the manager ends the machine on time regardless of
+it. A visitor who opens an ended desktop is sent back to the entry page, which
+says so and offers a new one. The manager recovers running containers after its
+own restart and limits concurrent sessions.
 
 ```sh
 npm run verify

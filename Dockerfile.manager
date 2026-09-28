@@ -12,6 +12,7 @@ FROM node:24.15.0-alpine
 WORKDIR /app
 
 COPY source ./source
+COPY Dockerfile.desktop ./Dockerfile.desktop
 COPY --from=page /app/dist ./dist
 
 ENV NODE_ENV=production \
@@ -21,9 +22,10 @@ ENV NODE_ENV=production \
     DEMO_SESSION_DOMAIN=phreshos.com \
     DEMO_DOCKER_SOCKET=/var/run/docker.sock \
     DEMO_DOCKER_NETWORK=phresh-demo \
-    DEMO_IMAGE=phreshos/demo:0.1.98 \
+    DEMO_IMAGE_REPOSITORY=phreshos/demo \
+    DEMO_IMAGE_CHECK_MILLISECONDS=600000 \
     DEMO_STATE=/data/sessions.json \
-    DEMO_IDLE_MILLISECONDS=3600000 \
+    DEMO_LIFETIME_MILLISECONDS=3600000 \
     DEMO_MAX_SESSIONS=5
 
 EXPOSE 8080

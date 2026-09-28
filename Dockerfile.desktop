@@ -4,7 +4,8 @@ ARG NODE_VERSION=24.15.0
 
 FROM node:${NODE_VERSION}-bookworm-slim AS base
 
-ARG CLI_VERSION=0.1.74
+# The versions are the latest releases, chosen by the manager that builds this image.
+ARG CLI_VERSION
 
 # A demo desktop is a disposable machine, not merely a packaged System
 # process. Keep the CLI, native build tools, and writable filesystem available
@@ -23,8 +24,8 @@ ENV PHRESHOS_HOME=/var/lib/phreshos \
 
 FROM base AS seeded
 
-ARG SYSTEM_VERSION=0.1.98
-ARG SPROUT_VERSION=0.1.0
+ARG SYSTEM_VERSION
+ARG SPROUT_VERSION
 
 # Use the same public installation transaction as a real machine. The result
 # becomes an immutable machine seed, not the live installation: OverlayFS
@@ -45,7 +46,7 @@ RUN set -eu; \
 
 FROM base
 
-ARG SYSTEM_VERSION=0.1.98
+ARG SYSTEM_VERSION
 ARG SOURCE_REVISION=unknown
 
 COPY --from=seeded /tmp/phreshos-machine-seed.tar /usr/local/share/phreshos-demo/machine-seed.tar
