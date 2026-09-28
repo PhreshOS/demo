@@ -37,6 +37,13 @@ RUN set -eu; \
     actual_sprout=$(phresh program inspect --program sprout --json | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk).on("end", () => process.stdout.write(JSON.parse(value).version))'); \
     test "$actual_sprout" = "${SPROUT_VERSION}"; \
     phresh program list --installed-only --json | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk).on("end", () => { const programs = JSON.parse(value).data; if (programs.length !== 1 || programs[0]?.identity !== "sprout") process.exit(1) })'; \
+    # Sprout records that it starts with the System a moment after it first runs; the seed must hold
+    # that, so every visitor's machine opens with the welcome.
+    for attempt in $(seq 1 60); do \
+      if [ "$(phresh program getStartup --program sprout --json)" != "null" ]; then break; fi; \
+      if [ "$attempt" = 60 ]; then echo "Sprout did not record its startup" >&2; exit 1; fi; \
+      sleep 1; \
+    done; \
     phresh system stop; \
     rm -f /var/lib/phreshos/gateway.sock /var/lib/phreshos/service.log /var/lib/phreshos/desktop; \
     tar -C / -cf /tmp/phreshos-machine-seed.tar \
