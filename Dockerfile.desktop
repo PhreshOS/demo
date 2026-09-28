@@ -1,0 +1,72 @@
+# syntax=docker/dockerfile:1
+
+ARG NODE_VERSION=24.15.0
+
+FROM node:${NODE_VERSION}-bookworm-slim AS base
+
+ARG CLI_VERSION=0.1.74
+
+# A demo desktop is a disposable machine, not merely a packaged System
+# process. Keep the CLI, native build tools, and writable filesystem available
+# to everything the visitor installs during that machine's lifetime.
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends ca-certificates curl g++ make python3 tini \
+    && rm -rf /var/lib/apt/lists/* \
+    && npm install --global "@phreshos/cli@${CLI_VERSION}" --no-audit --no-fund \
+    && mkdir -p /usr/local/lib/phreshos-demo /usr/local/share/phreshos-demo
+
+ENV PHRESHOS_HOME=/var/lib/phreshos \
+    PHRESHOS_HOST=0.0.0.0 \
+    PHRESHOS_PORT=4300 \
+    SHELL=/bin/bash \
+    PATH=/usr/local/lib/phreshos-demo/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+FROM base AS seeded
+
+ARG SYSTEM_VERSION=0.1.98
+ARG SPROUT_VERSION=0.1.0
+
+# Use the same public installation transaction as a real machine. The result
+# becomes an immutable machine seed, not the live installation: OverlayFS
+# cannot atomically rename a release directory that still belongs to a lower
+# image layer during a later System update.
+RUN set -eu; \
+    phresh system install --purge; \
+    phresh system version | grep -F "PhreshOS ${SYSTEM_VERSION}"; \
+    actual_sprout=$(phresh program inspect --program sprout --json | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk).on("end", () => process.stdout.write(JSON.parse(value).version))'); \
+    test "$actual_sprout" = "${SPROUT_VERSION}"; \
+    phresh program list --installed-only --json | node -e 'let value=""; process.stdin.on("data", chunk => value += chunk).on("end", () => { const programs = JSON.parse(value).data; if (programs.length !== 1 || programs[0]?.identity !== "sprout") process.exit(1) })'; \
+    phresh system stop; \
+    rm -f /var/lib/phreshos/gateway.sock /var/lib/phreshos/service.log /var/lib/phreshos/desktop; \
+    tar -C / -cf /tmp/phreshos-machine-seed.tar \
+      root/.local/share/phreshos/system \
+      root/.config/phreshos \
+      var/lib/phreshos
+
+FROM base
+
+ARG SYSTEM_VERSION=0.1.98
+ARG SOURCE_REVISION=unknown
+
+COPY --from=seeded /tmp/phreshos-machine-seed.tar /usr/local/share/phreshos-demo/machine-seed.tar
+COPY source/machine.mjs /usr/local/lib/phreshos-demo/machine.mjs
+COPY source/phresh.mjs /usr/local/lib/phreshos-demo/phresh.mjs
+RUN mkdir -p /usr/local/lib/phreshos-demo/bin \
+    && chmod 0755 /usr/local/lib/phreshos-demo/phresh.mjs \
+    && ln -s ../phresh.mjs /usr/local/lib/phreshos-demo/bin/phresh
+
+LABEL org.opencontainers.image.title="PhreshOS Demo" \
+      org.opencontainers.image.description="Disposable machine with PhreshOS installed through its public CLI" \
+      org.opencontainers.image.source="https://github.com/PhreshOS/system" \
+      org.opencontainers.image.version="${SYSTEM_VERSION}" \
+      org.opencontainers.image.revision="${SOURCE_REVISION}"
+
+EXPOSE 4300
+
+HEALTHCHECK --interval=2s --timeout=2s --start-period=10s --retries=10 \
+    CMD ["node", "-e", "fetch('http://127.0.0.1:4300/').then(response => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
+USER 0:0
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "/usr/local/lib/phreshos-demo/machine.mjs"]

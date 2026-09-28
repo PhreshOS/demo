@@ -1,0 +1,9 @@
+demo.phreshos.com {
+	reverse_proxy 127.0.0.1:18000
+}
+
+*.phreshos.com {
+	# Cloudflare owns public wildcard TLS; this certificate encrypts its origin hop.
+	tls internal
+	reverse_proxy 127.0.0.1:18000
+}

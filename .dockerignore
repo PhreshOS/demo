@@ -1,0 +1,9 @@
+*
+!Dockerfile.manager
+!Dockerfile.desktop
+!package.json
+!bun.lock
+!page
+!page/**
+!source
+!source/**

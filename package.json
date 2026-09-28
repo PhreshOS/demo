@@ -1,0 +1,22 @@
+{
+  "name": "@phreshos/demo",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.15.0"
+  },
+  "scripts": {
+    "build:manager": "docker build --file Dockerfile.manager --tag phreshos/demo-manager:dev .",
+    "check": "node --check source/*.mjs tests/*.mjs",
+    "test": "node --test",
+    "verify": "npm run check && npm run test",
+    "build:page": "bun build page/demo.tsx --outdir dist --minify"
+  },
+  "devDependencies": {
+    "@phreshos/react-ui": "^0.1.41",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0"
+  }
+}

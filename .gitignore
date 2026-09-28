@@ -1,0 +1,5 @@
+.DS_Store
+node_modules/
+phreshos.zip
+vps.txt
+dist/
