@@ -47,7 +47,11 @@ function Demo() {
       <Flex direction="column" align="center" gap="medium" style={{ textAlign: "center" }}>
         <Heading level={1} size="large">{progress.status === "full" ? "The garden is full right now." : "Nothing grew this time."}</Heading>
         <Text tone="secondary">{progress.status === "full" ? "Every demo is in use. Try again in a few minutes." : "Your desktop could not be started."}</Text>
-        <Button color="primary" onPress={() => setAttempt(value => value + 1)}>Try again</Button>
+        {/* When every demo is in use, the garden can still be planted at home. */}
+        <Flex gap="small" wrap justify="center">
+          <Button color="primary" onPress={() => setAttempt(value => value + 1)}>Try again</Button>
+          {progress.status === "full" && <Button href="https://phreshos.com/docs">Install it on your machine</Button>}
+        </Flex>
       </Flex>
     </Page>
   }
