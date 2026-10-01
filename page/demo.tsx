@@ -1,6 +1,6 @@
 import { StrictMode, useEffect, useState, type ReactNode } from "react"
 import { createRoot } from "react-dom/client"
-import { Button, Flex, Heading, Loading, ProgressBar, Surface, Text, UIProvider, useRequirement } from "@phreshos/react-ui"
+import { Button, Flex, Heading, Loading, Surface, Text, UIProvider, useColor, useRequirement } from "@phreshos/react-ui"
 import logoSource from "./logo.svg" with { type: "text" }
 
 const logo = `data:image/svg+xml,${encodeURIComponent(logoSource)}`
@@ -8,7 +8,7 @@ const logo = `data:image/svg+xml,${encodeURIComponent(logoSource)}`
 /** What the manager reports, one line per change, while it prepares a desktop. */
 type Progress =
   | { status: "container" | "system" | "failed" }
-  | { status: "full", freesIn: number | null, lifetime: number }
+  | { status: "full", freesIn: number | null }
   | { status: "ready", desktop: string }
 
 function Demo() {
@@ -47,8 +47,9 @@ function Demo() {
     return <Page>
       <Flex direction="column" align="center" gap="medium" style={{ textAlign: "center" }}>
         <Heading level={1} size="large">{progress.status === "full" ? "The garden is full right now." : "Nothing grew this time."}</Heading>
-        <Text tone="secondary">{progress.status === "full" ? "Every demo is in use." : "Your desktop could not be started."}</Text>
-        {progress.status === "full" && <Wait freesIn={progress.freesIn} lifetime={progress.lifetime} />}
+        {progress.status === "full"
+          ? <Text><Wait freesIn={progress.freesIn} /></Text>
+          : <Text tone="secondary">Your desktop could not be started.</Text>}
         {/* When every demo is in use, the garden can still be planted at home. */}
         <Flex gap="small" wrap justify="center">
           <Button color="primary" onPress={() => setAttempt(value => value + 1)}>Try again</Button>
@@ -72,11 +73,9 @@ function Demo() {
   </Page>
 }
 
-/**
- * How long until the soonest demo ends: the time left, large, and a bar of how far that demo
- * is through its life, full when it ends. Counted each second from when the manager said so.
- */
-function Wait({ freesIn, lifetime }: Readonly<{ freesIn: number | null, lifetime: number }>) {
+/** Why the demo is full and how long until the soonest one ends, counted down each second from when the manager said so. */
+function Wait({ freesIn }: Readonly<{ freesIn: number | null }>) {
+  const primary = useColor("primary").base
   const [arrived] = useState(Date.now)
   const [now, setNow] = useState(Date.now)
   useEffect(() => {
@@ -84,16 +83,18 @@ function Wait({ freesIn, lifetime }: Readonly<{ freesIn: number | null, lifetime
     return () => clearInterval(timer)
   }, [])
 
-  if (freesIn === null) return <Text tone="secondary">Try again in a few minutes.</Text>
-  const remaining = Math.max(0, arrived + freesIn - now)
-  const left = Math.ceil(remaining / 1000)
-  const filled = Math.min(100, Math.max(0, (lifetime - remaining) / lifetime * 100))
+  const left = freesIn === null ? null : Math.max(0, Math.ceil((arrived + freesIn - now) / 1000))
+  const said = (text: string) => <Text elementType="span" tone="secondary">{text}</Text>
+  if (left === null) return said("Every demo is in use. Try again in a few minutes.")
+  if (left === 0) return said("Every demo is in use. One is free now.")
   const time = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`
-
-  return <Flex direction="column" align="center" gap="small" style={{ width: "min(22rem, 80vw)", marginBlock: "0.5em" }}>
-    <Heading level={2} size="xlarge" style={{ fontVariantNumeric: "tabular-nums" }}>{left > 0 ? time : "Free now"}</Heading>
-    <ProgressBar value={filled} valueLabel="" label={left > 0 ? "until the next demo is free" : "A demo is free. Try again to plant yours."} style={{ width: "100%" }} />
-  </Flex>
+  // The one moving part of the page carries the brand's color, outside the receding tone
+  // that would fade it.
+  return <>
+    {said("Every demo is in use. The next one is free in ")}
+    <strong style={{ color: primary, fontVariantNumeric: "tabular-nums" }}>{time}</strong>
+    {said(".")}
+  </>
 }
 
 function Step({ ready, message }: Readonly<{ ready: boolean, message: string }>) {

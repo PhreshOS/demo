@@ -72,12 +72,12 @@ test("trying again replaces a desktop that failed to start", async () => {
 
 test("a full manager answers that it is full, and how long until a desktop frees", async () => {
   const token = createToken()
-  const sessions = { get: () => null, create: () => null, freesIn: () => 754_000, lifetimeMilliseconds: 3_600_000 }
+  const sessions = { get: () => null, create: () => null, freesIn: () => 754_000 }
   const response = captureResponse()
   await createHandler({ config: { entryHost: "demo.phreshos.com" }, sessions, page })(start(token), response)
 
   assert.equal(response.status, 503)
-  assert.deepEqual(response.lines(), [{ status: "full", freesIn: 754_000, lifetime: 3_600_000 }])
+  assert.deepEqual(response.lines(), [{ status: "full", freesIn: 754_000 }])
 })
 
 function start(token) {
