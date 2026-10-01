@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import http from "node:http"
 import { configuration } from "./configuration.mjs"
@@ -25,12 +26,10 @@ const sessions = new Sessions({
 await sessions.initialize()
 
 const upgraded = new Set()
-const scriptPath = "/__manager/demo.js"
-const page = {
-  html: demoPage(scriptPath),
-  script: await readFile(new URL("../dist/demo.js", import.meta.url), "utf8"),
-  scriptPath
-}
+const script = await readFile(new URL("../dist/demo.js", import.meta.url), "utf8")
+// Named by its content: caches in between can keep it forever, and never serve an old page.
+const scriptPath = `/__manager/demo-${createHash("sha256").update(script).digest("hex").slice(0, 12)}.js`
+const page = { html: demoPage(scriptPath), script, scriptPath }
 const handle = createHandler({ config, sessions, page })
 const server = http.createServer((request, response) => {
   void handle(request, response).catch(error => {

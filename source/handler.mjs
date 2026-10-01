@@ -90,7 +90,8 @@ export default function createHandler({ config, sessions, page }) {
     if (previous?.status === "failed") await sessions.remove(previous)
     const record = (previous?.status === "failed" ? null : previous) ?? sessions.create(selected.token)
     if (!record) {
-      sendProgress(response, 503, [{ status: "full" }])
+      // A duration, not a time, so the visitor's clock need not agree with the manager's.
+      sendProgress(response, 503, [{ status: "full", freesIn: sessions.freesIn() }])
       return
     }
 
@@ -150,7 +151,8 @@ function sendScript(response, body) {
   response.writeHead(200, {
     "content-type": "text/javascript; charset=utf-8",
     "content-length": Buffer.byteLength(body),
-    "cache-control": "no-cache"
+    // Its path names its content, so a new page is a new path and this one never changes.
+    "cache-control": "public, max-age=31536000, immutable"
   })
   response.end(body)
 }

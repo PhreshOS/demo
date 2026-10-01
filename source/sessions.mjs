@@ -100,6 +100,13 @@ export default class Sessions {
     for (const listener of this.watchers.get(record) ?? []) listener(record)
   }
 
+  /** How long until the soonest desktop ends and a new one can start, in milliseconds; null while none runs. */
+  freesIn() {
+    let soonest = null
+    for (const record of this.records.values()) if (soonest === null || record.expiresAt < soonest) soonest = record.expiresAt
+    return soonest === null ? null : Math.max(0, soonest - this.now())
+  }
+
   /** Removes every desktop whose lifetime has ended. */
   async expire() {
     const now = this.now()

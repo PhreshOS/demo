@@ -7,7 +7,8 @@ const logo = `data:image/svg+xml,${encodeURIComponent(logoSource)}`
 
 /** What the manager reports, one line per change, while it prepares a desktop. */
 type Progress =
-  | { status: "container" | "system" | "failed" | "full" }
+  | { status: "container" | "system" | "failed" }
+  | { status: "full", freesIn: number | null }
   | { status: "ready", desktop: string }
 
 function Demo() {
@@ -46,7 +47,7 @@ function Demo() {
     return <Page>
       <Flex direction="column" align="center" gap="medium" style={{ textAlign: "center" }}>
         <Heading level={1} size="large">{progress.status === "full" ? "The garden is full right now." : "Nothing grew this time."}</Heading>
-        <Text tone="secondary">{progress.status === "full" ? "Every demo is in use. Try again in a few minutes." : "Your desktop could not be started."}</Text>
+        <Text tone="secondary">{progress.status === "full" ? <>Every demo is in use. <Wait freesIn={progress.freesIn} /></> : "Your desktop could not be started."}</Text>
         {/* When every demo is in use, the garden can still be planted at home. */}
         <Flex gap="small" wrap justify="center">
           <Button color="primary" onPress={() => setAttempt(value => value + 1)}>Try again</Button>
@@ -68,6 +69,22 @@ function Demo() {
       This desktop is yours for an hour, then it is cleared. Nothing in it is kept, so keep private things out of it.
     </Text>
   </Page>
+}
+
+/** How long until the soonest demo ends, counted down each second from when the manager said so. */
+function Wait({ freesIn }: Readonly<{ freesIn: number | null }>) {
+  const [until] = useState(() => freesIn === null ? null : Date.now() + freesIn)
+  const [now, setNow] = useState(Date.now)
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  if (until === null) return <>Try again in a few minutes.</>
+  const seconds = Math.ceil((until - now) / 1000)
+  if (seconds <= 0) return <>One is free now.</>
+  const minutes = Math.floor(seconds / 60)
+  return <>The next one is free in <span style={{ fontVariantNumeric: "tabular-nums" }}>{minutes}:{String(seconds % 60).padStart(2, "0")}</span>.</>
 }
 
 function Step({ ready, message }: Readonly<{ ready: boolean, message: string }>) {

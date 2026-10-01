@@ -31,11 +31,14 @@ test("a desktop ends a fixed time after its creation, connected or not", async (
     assert.equal(sessions.create(), null)
 
     assert.equal(record.expiresAt, 1_000 + 3_600_000)
+    assert.equal(sessions.freesIn(), 3_600_000)
     now += 3_599_999
+    assert.equal(sessions.freesIn(), 1)
     assert.equal(await sessions.expire(), 0)
     now += 1
     assert.equal(await sessions.expire(), 1)
     assert.equal(sessions.getByHostname(record.hostname), null)
+    assert.equal(sessions.freesIn(), null)
     assert.deepEqual(stopped, ["container"])
   } finally {
     await rm(directory, { recursive: true, force: true })
