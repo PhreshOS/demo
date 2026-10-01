@@ -3,7 +3,8 @@ import { readFile } from "node:fs/promises"
 import http from "node:http"
 import { configuration } from "./configuration.mjs"
 import Docker from "./docker.mjs"
-import createHandler from "./handler.mjs"
+import Activity from "./activity.mjs"
+import createHandler, { name } from "./handler.mjs"
 import Sessions from "./sessions.mjs"
 import Images from "./images.mjs"
 import { demoPage, unavailable } from "./pages.mjs"
@@ -11,6 +12,7 @@ import { proxyUpgrade } from "./proxy.mjs"
 import { requestHostname } from "./session-host.mjs"
 
 const config = configuration()
+const activity = new Activity({ directory: config.activity })
 const docker = new Docker(config.socket)
 const images = new Images({ docker, repository: config.repository, root: new URL("..", import.meta.url).pathname })
 const sessions = new Sessions({
@@ -20,7 +22,8 @@ const sessions = new Sessions({
   domain: config.sessionDomain,
   statePath: config.state,
   lifetimeMilliseconds: config.lifetimeMilliseconds,
-  maxSessions: config.maxSessions
+  maxSessions: config.maxSessions,
+  onRemove: record => void activity.record("end", { desktop: name(record), lived: Math.round((Date.now() - record.createdAt) / 1000) })
 })
 
 await sessions.initialize()
@@ -30,7 +33,7 @@ const script = await readFile(new URL("../dist/demo.js", import.meta.url), "utf8
 // Named by its content: caches in between can keep it forever, and never serve an old page.
 const scriptPath = `/__manager/demo-${createHash("sha256").update(script).digest("hex").slice(0, 12)}.js`
 const page = { html: demoPage(scriptPath), script, scriptPath }
-const handle = createHandler({ config, sessions, page })
+const handle = createHandler({ config, sessions, page, activity })
 const server = http.createServer((request, response) => {
   void handle(request, response).catch(error => {
     console.error(error)
@@ -46,7 +49,13 @@ server.on("upgrade", (request, socket, head) => {
     return
   }
   upgraded.add(socket)
-  socket.on("close", () => upgraded.delete(socket))
+  // A connected browser is what using a desktop means; how long it stayed tells use from a glance.
+  const connected = Date.now()
+  void activity.record("connect", { desktop: name(record) }, request)
+  socket.on("close", () => {
+    upgraded.delete(socket)
+    void activity.record("disconnect", { desktop: name(record), stayed: Math.round((Date.now() - connected) / 1000) }, request)
+  })
   proxyUpgrade(request, socket, head, record)
 })
 

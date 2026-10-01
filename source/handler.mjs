@@ -3,7 +3,9 @@ import { proxyRequest } from "./proxy.mjs"
 import { requestHostname } from "./session-host.mjs"
 import { createToken, sessionCookie, sessionToken } from "./session-token.mjs"
 
-export default function createHandler({ config, sessions, page }) {
+export default function createHandler({ config, sessions, page, activity = null }) {
+  const note = (event, fields, request) => activity?.record(event, fields, request)
+
   return async function handle(request, response) {
     const url = new URL(request.url ?? "/", `https://${config.entryHost}`)
 
@@ -42,6 +44,7 @@ export default function createHandler({ config, sessions, page }) {
       return
     }
 
+    if (request.method === "GET" && url.pathname === "/") note("desktop", { desktop: name(record) }, request)
     proxyRequest(request, response, record)
   }
 
@@ -64,6 +67,7 @@ export default function createHandler({ config, sessions, page }) {
       return
     }
     const record = selected.token ? sessions.get(selected.token) : null
+    note("page", { desktop: record ? name(record) : null }, request)
     if (record?.status === "ready") {
       redirect(response, record.hostname)
       return
@@ -88,7 +92,9 @@ export default function createHandler({ config, sessions, page }) {
     // Trying again replaces a desktop that failed to start.
     const previous = sessions.get(selected.token)
     if (previous?.status === "failed") await sessions.remove(previous)
-    const record = (previous?.status === "failed" ? null : previous) ?? sessions.create(selected.token)
+    const existing = previous?.status === "failed" ? null : previous
+    const record = existing ?? sessions.create(selected.token)
+    note(record ? (existing ? "resume" : "start") : "full", { desktop: record ? name(record) : null }, request)
     if (!record) {
       // A duration, not a time, so the visitor's clock need not agree with the manager's.
       sendProgress(response, 503, [{ status: "full", freesIn: sessions.freesIn() }])
@@ -164,4 +170,9 @@ function sendText(response, status, body) {
     "cache-control": "public, max-age=86400"
   })
   response.end(body)
+}
+
+/** A desktop's short name in the activity log: the first label of its hostname. */
+export function name(record) {
+  return record.hostname.split(".")[0]
 }

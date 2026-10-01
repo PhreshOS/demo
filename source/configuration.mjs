@@ -13,6 +13,8 @@ export function configuration(environment = process.env) {
     repository: value(environment.DEMO_IMAGE_REPOSITORY, "phreshos/demo"),
     imageCheckMilliseconds: integer(environment.DEMO_IMAGE_CHECK_MILLISECONDS, 600_000, "DEMO_IMAGE_CHECK_MILLISECONDS", 60_000),
     state: resolve(value(environment.DEMO_STATE, "/data/sessions.json")),
+    // What visitors do, a file per day; see Activity.
+    activity: resolve(value(environment.DEMO_ACTIVITY, "/data/activity")),
     lifetimeMilliseconds: integer(environment.DEMO_LIFETIME_MILLISECONDS, 3_600_000, "DEMO_LIFETIME_MILLISECONDS", 60_000),
     maxSessions: integer(environment.DEMO_MAX_SESSIONS, 5, "DEMO_MAX_SESSIONS", 1)
   })

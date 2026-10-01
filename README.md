@@ -83,6 +83,14 @@ it. A visitor who opens an ended desktop is sent back to the entry page, which
 says so and offers a new one. The manager recovers running containers after its
 own restart and limits concurrent sessions.
 
+The manager writes what visitors do to `activity/` beside its state, one JSON
+line per event and a file per day, kept for seven days: the entry page, a
+desktop started, resumed, or refused as full, its page loaded, a browser
+connected and for how long, and the desktop's end. A visitor appears as their
+address hashed with a secret kept for that day only, with their user agent, so
+one source opening many desktops shows without any address being written; the
+day's secret is deleted when the day ends.
+
 ```sh
 npm run verify
 npm run build:manager

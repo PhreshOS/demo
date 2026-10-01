@@ -4,8 +4,9 @@ import { desktopHostname, validDesktopHostname } from "./session-host.mjs"
 import { createToken, validToken } from "./session-token.mjs"
 
 export default class Sessions {
-  constructor({ docker, image, network, domain, statePath, lifetimeMilliseconds, maxSessions, now = Date.now }) {
+  constructor({ docker, image, network, domain, statePath, lifetimeMilliseconds, maxSessions, now = Date.now, onRemove = () => {} }) {
     this.docker = docker
+    this.onRemove = onRemove
     this.image = image
     this.network = network
     this.domain = domain
@@ -120,6 +121,7 @@ export default class Sessions {
     this.records.delete(record.token)
     this.hostnames.delete(record.hostname)
     this.watchers.delete(record)
+    this.onRemove(record)
     if (record.containerId) await this.docker.stop(record.containerId).catch(() => undefined)
     await this.persist()
   }
