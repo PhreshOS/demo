@@ -44,10 +44,12 @@ test("a new release is built, tried as a desktop, and only then becomes current"
 
   const programs = { files: "0.1.4", sprout: "0.1.3" }
   assert.equal(programList(programs), "files@0.1.4 sprout@0.1.3")
-  const tag = imageTag({ cli: "0.1.80", system: "0.1.103", programs })
-  assert.match(tag, /^0\.1\.103-cli0\.1\.80-programs-[0-9a-f]{12}$/)
-  // Any Program's new release names a new image.
-  assert.notEqual(imageTag({ cli: "0.1.80", system: "0.1.103", programs: { ...programs, files: "0.1.5" } }), tag)
+  const files = await manager.files()
+  const tag = imageTag({ cli: "0.1.80", system: "0.1.103", programs }, files)
+  assert.match(tag, /^0\.1\.103-cli0\.1\.80-[0-9a-f]{12}$/)
+  // Any Program's new release names a new image, and so does any change to the image's own files.
+  assert.notEqual(imageTag({ cli: "0.1.80", system: "0.1.103", programs: { ...programs, files: "0.1.5" } }, files), tag)
+  assert.notEqual(imageTag({ cli: "0.1.80", system: "0.1.103", programs }, files.map(file => file.name === "Dockerfile.desktop" ? { ...file, content: Buffer.from("changed") } : file)), tag)
   const image = `phreshos/demo:${tag}`
   assert.deepEqual(await manager.check(), { image, changed: true })
   assert.deepEqual(calls, [

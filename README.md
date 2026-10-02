@@ -14,7 +14,9 @@ verified result is stored as a local machine seed. First boot extracts that seed
 into the container's writable layer so atomic System updates behave like they
 do on a normal filesystem. No source repository or release is downloaded while
 creating the session, and a visitor finds every Program ready without the
-machine asking GitHub for anything.
+machine asking GitHub for anything. The machine opens on the Desktop rather than
+Sprout's welcome, whose planting would ask GitHub for the catalog on every
+visit; Sprout stays installed for anyone who opens it.
 
 ```sh
 docker build \

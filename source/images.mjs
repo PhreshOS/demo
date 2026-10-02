@@ -33,7 +33,8 @@ export default class Images {
 
   async check() {
     const versions = await this.latest()
-    const tag = imageTag(versions)
+    const files = await this.files()
+    const tag = imageTag(versions, files)
     const image = `${this.repository}:${tag}`
     const current = await this.docker.imageId(`${this.repository}:current`)
     const built = await this.docker.imageId(image)
@@ -44,7 +45,7 @@ export default class Images {
       await this.docker.build({
         tag: image,
         dockerfile: "Dockerfile.desktop",
-        context: await this.context(),
+        context: tar(files),
         buildArgs: { CLI_VERSION: versions.cli, SYSTEM_VERSION: versions.system, PROGRAMS: programList(versions.programs), SOURCE_REVISION: tag }
       })
     }
@@ -109,8 +110,9 @@ export default class Images {
     }
   }
 
-  async context() {
-    return tar(await Promise.all(contextFiles.map(async name => ({ name, content: await readFile(resolve(this.root, name)) }))))
+  /** The files the image is built from, as they are now. */
+  async files() {
+    return await Promise.all(contextFiles.map(async name => ({ name, content: await readFile(resolve(this.root, name)) })))
   }
 }
 
@@ -119,9 +121,14 @@ export function programList(programs) {
   return Object.entries(programs).sort(([left], [right]) => left.localeCompare(right)).map(([identity, release]) => `${identity}@${release}`).join(" ")
 }
 
-/** One tag names everything an image was built from; the Programs, too many to spell, by a digest. */
-export function imageTag({ cli, system, programs }) {
-  return `${system}-cli${cli}-programs-${createHash("sha256").update(programList(programs)).digest("hex").slice(0, 12)}`
+/**
+ * One tag names everything an image was built from: the System and CLI by version, and the Programs
+ * and the image's own files, too many to spell, by one digest. A change to any of them is a new image.
+ */
+export function imageTag({ cli, system, programs }, files) {
+  const digest = createHash("sha256").update(programList(programs))
+  for (const { name, content } of files) digest.update(`\0${name}\0`).update(content)
+  return `${system}-cli${cli}-${digest.digest("hex").slice(0, 12)}`
 }
 
 function version(tag) {

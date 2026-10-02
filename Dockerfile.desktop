@@ -42,13 +42,17 @@ RUN set -eu; \
     done; \
     # The machine holds exactly the Programs named, at exactly their versions.
     phresh program list --installed-only --json | PROGRAMS="${PROGRAMS}" node -e 'let value=""; process.stdin.on("data", chunk => value += chunk).on("end", () => { const installed = JSON.parse(value).data.map(program => `${program.identity}@${program.version}`).sort().join(" "); const expected = process.env.PROGRAMS.split(" ").filter(Boolean).sort().join(" "); if (installed !== expected) { console.error(`Installed ${installed}, expected ${expected}`); process.exit(1) } })'; \
-    # Sprout records that it starts with the System a moment after it first runs; the seed must hold
-    # that, so every visitor's machine opens with the welcome.
+    # Sprout records that it starts with the System a moment after it first runs. With every Program
+    # already planted, a visitor needs no welcome: once Sprout has recorded it, the seed removes it, so
+    # the machine opens on the Desktop. Sprout's planting would ask GitHub for the catalog on every
+    # visit, which the demo's shared address cannot afford. The machine shows Sprout's clock instead.
     for attempt in $(seq 1 60); do \
       if [ "$(phresh program getStartup --program sprout --json)" != "null" ]; then break; fi; \
       if [ "$attempt" = 60 ]; then echo "Sprout did not record its startup" >&2; exit 1; fi; \
       sleep 1; \
     done; \
+    phresh program removeStartup --program sprout; \
+    test "$(phresh program getStartup --program sprout --json)" = "null"; \
     phresh system stop; \
     rm -f /var/lib/phreshos/gateway.sock /var/lib/phreshos/service.log /var/lib/phreshos/desktop; \
     tar -C / -cf /tmp/phreshos-machine-seed.tar \
