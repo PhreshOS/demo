@@ -91,7 +91,7 @@ export default function createHandler({ config, sessions, page, activity = null 
 
     // Trying again replaces a desktop that failed to start.
     const previous = sessions.get(selected.token)
-    if (previous?.status === "failed") await sessions.remove(previous)
+    if (previous?.status === "failed") await sessions.remove(previous, "failed")
     const existing = previous?.status === "failed" ? null : previous
     const record = existing ?? sessions.create(selected.token)
     note(record ? (existing ? "resume" : "start") : "full", { desktop: record ? name(record) : null }, request)

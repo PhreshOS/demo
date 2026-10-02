@@ -4,7 +4,7 @@ import { desktopHostname, validDesktopHostname } from "./session-host.mjs"
 import { createToken, validToken } from "./session-token.mjs"
 
 export default class Sessions {
-  constructor({ docker, image, network, domain, statePath, lifetimeMilliseconds, maxSessions, now = Date.now, onRemove = () => {} }) {
+  constructor({ docker, image, network, domain, statePath, lifetimeMilliseconds, idleMilliseconds = Infinity, maxSessions, now = Date.now, onRemove = () => {} }) {
     this.docker = docker
     this.onRemove = onRemove
     this.image = image
@@ -12,6 +12,7 @@ export default class Sessions {
     this.domain = domain
     this.statePath = statePath
     this.lifetimeMilliseconds = lifetimeMilliseconds
+    this.idleMilliseconds = idleMilliseconds
     this.maxSessions = maxSessions
     this.now = now
     this.records = new Map()
@@ -44,6 +45,9 @@ export default class Sessions {
         status: "ready",
         createdAt: previous?.createdAt ?? this.now(),
         expiresAt: previous?.expiresAt ?? (previous?.createdAt ?? this.now()) + this.lifetimeMilliseconds,
+        // Connections are not known across a restart: a browser still there reconnects at once.
+        connections: 0,
+        idleSince: this.now(),
         pending: null
       })
     }
@@ -76,8 +80,11 @@ export default class Sessions {
       containerName: this.name(token),
       status: "container",
       createdAt,
-      // A desktop lives a fixed time from its creation, whether or not anyone is connected.
+      // A desktop lives a fixed time from its creation at most, and ends sooner once no browser has
+      // been connected to it for the idle time.
       expiresAt: createdAt + this.lifetimeMilliseconds,
+      connections: 0,
+      idleSince: createdAt,
       pending: null
     }
     this.add(record)
@@ -101,27 +108,46 @@ export default class Sessions {
     for (const listener of this.watchers.get(record) ?? []) listener(record)
   }
 
+  /** A browser connected to the desktop. */
+  connected(record) {
+    record.connections++
+  }
+
+  /** A browser left the desktop; once none is left, its idle time starts. */
+  disconnected(record) {
+    record.connections = Math.max(0, record.connections - 1)
+    if (record.connections === 0) record.idleSince = this.now()
+  }
+
+  /** When the desktop ends if nothing changes: its lifetime's end, or sooner while nobody is connected. */
+  endsAt(record) {
+    return record.connections > 0 ? record.expiresAt : Math.min(record.expiresAt, record.idleSince + this.idleMilliseconds)
+  }
+
   /** How long until the soonest desktop ends and a new one can start, in milliseconds; null while none runs. */
   freesIn() {
     let soonest = null
-    for (const record of this.records.values()) if (soonest === null || record.expiresAt < soonest) soonest = record.expiresAt
+    for (const record of this.records.values()) {
+      const ends = this.endsAt(record)
+      if (soonest === null || ends < soonest) soonest = ends
+    }
     return soonest === null ? null : Math.max(0, soonest - this.now())
   }
 
-  /** Removes every desktop whose lifetime has ended. */
+  /** Removes every desktop whose lifetime has ended, or that nobody has used for the idle time. */
   async expire() {
     const now = this.now()
-    const expired = [...this.records.values()].filter(record => record.expiresAt <= now)
-    for (const record of expired) await this.remove(record)
-    return expired.length
+    const ended = [...this.records.values()].filter(record => this.endsAt(record) <= now)
+    for (const record of ended) await this.remove(record, record.expiresAt <= now ? "lifetime" : "idle")
+    return ended.length
   }
 
-  async remove(record) {
+  async remove(record, reason = "lifetime") {
     if (this.records.get(record.token) !== record) return
     this.records.delete(record.token)
     this.hostnames.delete(record.hostname)
     this.watchers.delete(record)
-    this.onRemove(record)
+    this.onRemove(record, reason)
     if (record.containerId) await this.docker.stop(record.containerId).catch(() => undefined)
     await this.persist()
   }

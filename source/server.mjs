@@ -22,8 +22,9 @@ const sessions = new Sessions({
   domain: config.sessionDomain,
   statePath: config.state,
   lifetimeMilliseconds: config.lifetimeMilliseconds,
+  idleMilliseconds: config.idleMilliseconds,
   maxSessions: config.maxSessions,
-  onRemove: record => void activity.record("end", { desktop: name(record), lived: Math.round((Date.now() - record.createdAt) / 1000) })
+  onRemove: (record, reason) => void activity.record("end", { desktop: name(record), lived: Math.round((Date.now() - record.createdAt) / 1000), reason })
 })
 
 await sessions.initialize()
@@ -51,9 +52,11 @@ server.on("upgrade", (request, socket, head) => {
   upgraded.add(socket)
   // A connected browser is what using a desktop means; how long it stayed tells use from a glance.
   const connected = Date.now()
+  sessions.connected(record)
   void activity.record("connect", { desktop: name(record) }, request)
   socket.on("close", () => {
     upgraded.delete(socket)
+    sessions.disconnected(record)
     void activity.record("disconnect", { desktop: name(record), stayed: Math.round((Date.now() - connected) / 1000) }, request)
   })
   proxyUpgrade(request, socket, head, record)

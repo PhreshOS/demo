@@ -38,6 +38,23 @@ export async function announceLifetime(environment = process.env, file = demoFil
   await writeFile(file, `${JSON.stringify({ startedAt, expiresAt })}\n`, { mode: 0o444 })
 }
 
+/**
+ * Shows the time this machine has left from the moment its System starts, with Sprout's clock
+ * behind the Windows; its lifetime travels as the clock's options. It only informs, so a clock that
+ * cannot start leaves the machine as it is.
+ */
+export async function showClock(command = phresh, environment = process.env) {
+  const startedAt = environment.PHRESHOS_DEMO_STARTED_AT
+  const expiresAt = environment.PHRESHOS_DEMO_EXPIRES_AT
+  if (!startedAt || !expiresAt || Number.isNaN(Date.parse(startedAt)) || Number.isNaN(Date.parse(expiresAt))) return
+  try {
+    await command(["process", "create", "--program", "sprout", "--name", "clock", "--replace", "--client-layer", "under",
+      "--option", "view=clock", "--option", `startedAt=${startedAt}`, "--option", `expiresAt=${expiresAt}`])
+  } catch (error) {
+    console.error("The demo's clock could not start:", error)
+  }
+}
+
 async function provisionMachine() {
   try {
     await access(seeded)
@@ -73,7 +90,7 @@ function execute(executable, arguments_, options = {}) {
   })
 }
 
-async function createSupervisor() {
+async function createSupervisor({ started = async () => {} } = {}) {
   await rm(machineSocket, { force: true })
   let pending = Promise.resolve()
 
@@ -103,6 +120,8 @@ async function createSupervisor() {
               send(socket, { stream, data })
             }
           })
+          // A System started again, after an update too, shows the clock again.
+          if (systemStarts.has(request.arguments[1])) await started()
           send(socket, { exitCode: 0 })
         } catch (error) {
           console.error(error)
@@ -147,6 +166,9 @@ function send(socket, message) {
 }
 
 const machineOperations = new Set(["install", "uninstall", "start", "stop", "enable", "disable"])
+
+/** The lifecycle operations that leave the System running. */
+const systemStarts = new Set(["install", "start"])
 
 function waitForShutdown() {
   return new Promise(resolve => {

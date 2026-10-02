@@ -7,27 +7,32 @@ the session manager, its routing configuration, and its behavior tests.
 
 `Dockerfile.desktop` builds a disposable machine with the public PhreshOS CLI
 installed globally. During the image build, that CLI performs the same official
-System installation transaction as a user installation and verifies the
-resolved System and Sprout versions. The verified result is stored as a local
-machine seed. First boot extracts that seed into the container's writable layer
-so atomic System updates behave like they do on a normal filesystem. No source
-repository or release is downloaded while creating the session.
+System installation transaction as a user installation, installs every
+official Program with the same CLI, and verifies the resolved System version and
+that exactly the named Programs are installed at exactly their versions. The
+verified result is stored as a local machine seed. First boot extracts that seed
+into the container's writable layer so atomic System updates behave like they
+do on a normal filesystem. No source repository or release is downloaded while
+creating the session, and a visitor finds every Program ready without the
+machine asking GitHub for anything.
 
 ```sh
 docker build \
   --file Dockerfile.desktop \
   --build-arg CLI_VERSION=<version> \
   --build-arg SYSTEM_VERSION=<expected-version> \
-  --build-arg SPROUT_VERSION=<expected-version> \
+  --build-arg PROGRAMS="<identity>@<version> <identity>@<version> ..." \
   --build-arg SOURCE_REVISION=<commit> \
   --tag phreshos/demo:<version> \
   .
 ```
 
-The manager builds this image itself. Every ten minutes
-(`DEMO_IMAGE_CHECK_MILLISECONDS`) it reads the latest CLI from npm and the
-latest System and Sprout releases from GitHub. When any has changed, it builds
-`phreshos/demo:<system>-sprout<sprout>-cli<cli>`, runs it once as a desktop
+The manager builds this image itself. Every thirty minutes
+(`DEMO_IMAGE_CHECK_MILLISECONDS`) it reads the latest CLI from npm, and from
+GitHub the latest System release and the latest stable release of every public
+`<identity>-program` repository, which are the official Programs; Sprout must be
+among them. When any has changed, it builds
+`phreshos/demo:<system>-cli<cli>-programs-<digest>`, runs it once as a desktop
 until its System answers, and only then points `phreshos/demo:current` at it.
 New desktops start from `current`, so each release reaches the demo without any
 change here, and a release whose image does not come up never does. Desktops
@@ -73,20 +78,23 @@ are excluded from the entry and issued hostnames through their shared
 `robots.txt` response.
 
 HTTP and WebSocket traffic is proxied to the session's container. A desktop
-lives a fixed time from its creation, one hour by default
-(`DEMO_LIFETIME_MILLISECONDS`), whether or not anyone is connected, and is
-removed when that time ends. The manager passes the machine its start and end
+lives at most a fixed time from its creation, one hour by default
+(`DEMO_LIFETIME_MILLISECONDS`), and ends sooner once no browser has been
+connected to it for ten minutes (`DEMO_IDLE_MILLISECONDS`), so a visitor who
+left frees it for the next. The manager passes the machine its start and end
 as `PHRESHOS_DEMO_STARTED_AT` and `PHRESHOS_DEMO_EXPIRES_AT`; the machine writes
-them to `/etc/phreshos/demo.json`, where Sprout finds them and shows the time
-left. The file only informs: the manager ends the machine on time regardless of
+them to `/etc/phreshos/demo.json`, where Sprout finds them, and shows the time
+left with Sprout's clock behind the Windows from the moment its System starts. The file only informs: the manager ends the machine on time regardless of
 it. A visitor who opens an ended desktop is sent back to the entry page, which
 says so and offers a new one. The manager recovers running containers after its
-own restart and limits concurrent sessions.
+own restart and limits concurrent sessions, seven by default
+(`DEMO_MAX_SESSIONS`).
 
 The manager writes what visitors do to `activity/` beside its state, one JSON
 line per event and a file per day, kept for seven days: the entry page, a
 desktop started, resumed, or refused as full, its page loaded, a browser
-connected and for how long, and the desktop's end. A visitor appears as their
+connected and for how long, and the desktop's end and why: its lifetime, idle,
+or a failed start. A visitor appears as their
 address hashed with a secret kept for that day only, with their user agent, so
 one source opening many desktops shows without any address being written; the
 day's secret is deleted when the day ends.

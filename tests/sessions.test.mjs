@@ -7,7 +7,7 @@ import Sessions from "../source/sessions.mjs"
 import { desktopHostname } from "../source/session-host.mjs"
 import { createToken } from "../source/session-token.mjs"
 
-test("a desktop ends a fixed time after its creation, connected or not", async () => {
+test("a desktop someone stays connected to ends a fixed time after its creation", async () => {
   const directory = await mkdtemp(join(tmpdir(), "phresh-demo-sessions-"))
   let now = 1_000
   const stopped = []
@@ -19,11 +19,12 @@ test("a desktop ends a fixed time after its creation, connected or not", async (
     async stop(id) { stopped.push(id) }
   }
   try {
-    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath: join(directory, "state.json"), lifetimeMilliseconds: 3_600_000, maxSessions: 1, now: () => now })
+    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath: join(directory, "state.json"), lifetimeMilliseconds: 3_600_000, idleMilliseconds: 600_000, maxSessions: 1, now: () => now })
     await sessions.initialize()
     const token = createToken()
     const record = sessions.create(token)
     assert(record)
+    sessions.connected(record)
     assert.equal(record.token, token)
     assert.equal(sessions.getByHostname(record.hostname), record)
     await record.pending
@@ -124,6 +125,56 @@ test("a short hostname collision chooses another identifier", async () => {
     const record = sessions.create(token)
     assert.equal(record.hostname, desktopHostname(token, "phreshos.com", 1))
     await record.pending
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test("a desktop nobody is connected to ends after the idle time, and a connection holds it", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "phresh-demo-sessions-"))
+  let now = 0
+  const ended = []
+  const docker = {
+    async ensureNetwork() {},
+    async listDesktops() { return [] },
+    async createDesktop() { return "container" },
+    async inspect() { return { State: { Running: true, Health: { Status: "healthy" } } } },
+    async stop() {}
+  }
+  try {
+    const sessions = new Sessions({ docker, image: "image", network: "network", domain: "phreshos.com", statePath: join(directory, "state.json"), lifetimeMilliseconds: 3_600_000, idleMilliseconds: 600_000, maxSessions: 2, now: () => now, onRemove: (record, reason) => ended.push([record.token, reason]) })
+    await sessions.initialize()
+    const unused = sessions.create(createToken())
+    const used = sessions.create(createToken())
+    await Promise.all([unused.pending, used.pending])
+
+    // Never opened: it ends once the idle time has passed since its creation.
+    assert.equal(sessions.freesIn(), 600_000)
+    sessions.connected(used)
+    sessions.connected(used)
+    now = 600_000
+    assert.equal(await sessions.expire(), 1)
+    assert.deepEqual(ended, [[unused.token, "idle"]])
+
+    // Two browsers: the desktop stays while either remains, and its idle time starts when the last leaves.
+    now = 1_000_000
+    sessions.disconnected(used)
+    now = 2_000_000
+    assert.equal(await sessions.expire(), 0)
+    sessions.disconnected(used)
+    assert.equal(sessions.freesIn(), 600_000)
+    now = 2_599_999
+    assert.equal(await sessions.expire(), 0)
+    // A browser back in time keeps it.
+    sessions.connected(used)
+    now = 3_000_000
+    assert.equal(await sessions.expire(), 0)
+    sessions.disconnected(used)
+    // Its lifetime still ends it, whichever comes first.
+    assert.equal(sessions.freesIn(), 600_000)
+    now = 3_600_000
+    assert.equal(await sessions.expire(), 1)
+    assert.deepEqual(ended.at(-1), [used.token, "lifetime"])
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

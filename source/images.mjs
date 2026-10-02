@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { readFile } from "node:fs/promises"
 import { resolve } from "node:path"
 import { desktopConfiguration } from "./docker.mjs"
@@ -7,7 +8,9 @@ const contextFiles = ["Dockerfile.desktop", "source/machine.mjs", "source/phresh
 
 /**
  * Keeps the demo image on the latest published PhreshOS. It checks the latest CLI, System, and
- * Sprout releases; when any has changed, it builds an image from them, tries it as a real desktop,
+ * official Program releases; when any has changed, it builds an image with all of them installed,
+ * so a visitor finds every Program ready and the desktop asks GitHub for nothing. It tries the
+ * image as a real desktop,
  * and only then moves the `current` tag to it. New desktops start from `current`, so a release
  * reaches visitors without any change here, and a broken release never does. Desktops already
  * running keep the image they started from.
@@ -42,7 +45,7 @@ export default class Images {
         tag: image,
         dockerfile: "Dockerfile.desktop",
         context: await this.context(),
-        buildArgs: { CLI_VERSION: versions.cli, SYSTEM_VERSION: versions.system, SPROUT_VERSION: versions.sprout, SOURCE_REVISION: tag }
+        buildArgs: { CLI_VERSION: versions.cli, SYSTEM_VERSION: versions.system, PROGRAMS: programList(versions.programs), SOURCE_REVISION: tag }
       })
     }
 
@@ -53,18 +56,27 @@ export default class Images {
     return { image, changed: true }
   }
 
-  /** The latest published CLI, System, and Sprout versions. */
+  /**
+   * The latest published CLI and System, and every official Program with a stable release: each
+   * public `<identity>-program` repository of the organization. Sprout must be among them.
+   */
   async latest() {
-    const [cli, system, sprout] = await Promise.all([
+    const [cli, system, repositories] = await Promise.all([
       this.json("https://registry.npmjs.org/@phreshos/cli/latest").then(release => release.version),
-      this.json("https://api.github.com/repos/PhreshOS/system/releases/latest").then(release => release.tag_name.replace(/^v/, "")),
-      this.json("https://api.github.com/repos/PhreshOS/sprout-program/releases/latest").then(release => release.tag_name.replace(/^v/, ""))
+      this.json("https://api.github.com/repos/PhreshOS/system/releases/latest").then(release => version(release.tag_name)),
+      this.json("https://api.github.com/orgs/PhreshOS/repos?type=public&per_page=100")
     ])
-    return { cli, system, sprout }
+    const identities = repositories.map(repository => /^([a-z0-9-]+)-program$/.exec(repository.name)?.[1]).filter(Boolean).sort()
+    const releases = await Promise.all(identities.map(identity => this.json(`https://api.github.com/repos/PhreshOS/${identity}-program/releases/latest`, true)))
+    const programs = Object.fromEntries(identities.flatMap((identity, index) => releases[index] ? [[identity, version(releases[index].tag_name)]] : []))
+    if (!programs.sprout) throw new Error("Sprout has no stable release")
+    return { cli, system, programs }
   }
 
-  async json(url) {
+  /** A JSON answer, or null for a missing one when `optional`, as a repository without a release. */
+  async json(url, optional = false) {
     const response = await this.fetch(url, { headers: { accept: "application/json", "user-agent": "phreshos-demo" } })
+    if (optional && response.status === 404) return null
     if (!response.ok) throw new Error(`${url} answered ${response.status}`)
     return await response.json()
   }
@@ -102,9 +114,18 @@ export default class Images {
   }
 }
 
-/** One tag names everything an image was built from. */
-export function imageTag({ cli, system, sprout }) {
-  return `${system}-sprout${sprout}-cli${cli}`
+/** The Programs an image holds, as the image's build reads them: `identity@version`, by identity. */
+export function programList(programs) {
+  return Object.entries(programs).sort(([left], [right]) => left.localeCompare(right)).map(([identity, release]) => `${identity}@${release}`).join(" ")
+}
+
+/** One tag names everything an image was built from; the Programs, too many to spell, by a digest. */
+export function imageTag({ cli, system, programs }) {
+  return `${system}-cli${cli}-programs-${createHash("sha256").update(programList(programs)).digest("hex").slice(0, 12)}`
+}
+
+function version(tag) {
+  return tag.replace(/^v/, "")
 }
 
 /** A plain tar archive of a few small files, as Docker takes a build context. */

@@ -61,3 +61,20 @@ test("the machine writes the lifetime it was given where Programs read it, read-
     await remove(directory, { recursive: true, force: true })
   }
 })
+
+test("the machine shows its clock with the lifetime it was given, and never fails over it", async () => {
+  const { showClock } = await import("../source/machine.mjs")
+  const calls = []
+  const lifetime = { PHRESHOS_DEMO_STARTED_AT: "2026-09-28T08:00:00.000Z", PHRESHOS_DEMO_EXPIRES_AT: "2026-09-28T09:00:00.000Z" }
+  await showClock(async arguments_ => calls.push(arguments_), lifetime)
+  assert.deepEqual(calls, [["process", "create", "--program", "sprout", "--name", "clock", "--replace", "--client-layer", "under",
+    "--option", "view=clock", "--option", "startedAt=2026-09-28T08:00:00.000Z", "--option", "expiresAt=2026-09-28T09:00:00.000Z"]])
+  // An ordinary machine has no clock.
+  await showClock(async arguments_ => calls.push(arguments_), {})
+  assert.equal(calls.length, 1)
+  // A clock that cannot start leaves the machine running.
+  const error = console.error
+  console.error = () => {}
+  try { await showClock(async () => { throw new Error("no") }, lifetime) }
+  finally { console.error = error }
+})
