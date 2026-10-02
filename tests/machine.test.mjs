@@ -78,3 +78,25 @@ test("the machine shows its clock with the lifetime it was given, and never fail
   try { await showClock(async () => { throw new Error("no") }, lifetime) }
   finally { console.error = error }
 })
+
+test("a machine with a lifetime shows its clock once its System has started", async () => {
+  const calls = []
+  const saved = { started: process.env.PHRESHOS_DEMO_STARTED_AT, expires: process.env.PHRESHOS_DEMO_EXPIRES_AT }
+  process.env.PHRESHOS_DEMO_STARTED_AT = "2026-09-28T08:00:00.000Z"
+  process.env.PHRESHOS_DEMO_EXPIRES_AT = "2026-09-28T09:00:00.000Z"
+  try {
+    await runMachine({
+      provision: async () => undefined,
+      announce: async () => undefined,
+      command: async arguments_ => calls.push(arguments_.slice(0, 2).join(" ")),
+      supervise: async () => ({ close: async () => undefined }),
+      shutdown: async () => calls.push("shutdown")
+    })
+  } finally {
+    for (const [name, value] of [["PHRESHOS_DEMO_STARTED_AT", saved.started], ["PHRESHOS_DEMO_EXPIRES_AT", saved.expires]]) {
+      if (value === undefined) delete process.env[name]
+      else process.env[name] = value
+    }
+  }
+  assert.deepEqual(calls, ["system start", "process create", "shutdown", "system stop"])
+})

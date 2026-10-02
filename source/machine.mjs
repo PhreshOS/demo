@@ -12,12 +12,13 @@ export const demoFile = "/etc/phreshos/demo.json"
 export async function runMachine({ provision = provisionMachine, announce = announceLifetime, command = phresh, supervise = createSupervisor, shutdown = waitForShutdown } = {}) {
   await provision()
   await announce()
-  const supervisor = await supervise()
+  const supervisor = await supervise({ started: () => showClock(command) })
   let started = false
 
   try {
     await command(["system", "start"])
     started = true
+    await showClock(command)
     await shutdown()
   } finally {
     await supervisor.close()
