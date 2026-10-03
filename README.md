@@ -89,7 +89,7 @@ them to `/etc/phreshos/demo.json`, where Sprout finds them, and shows the time
 left with Sprout's clock behind the Windows from the moment its System starts. The file only informs: the manager ends the machine on time regardless of
 it. A visitor who opens an ended desktop is sent back to the entry page, which
 says so and offers a new one. The manager recovers running containers after its
-own restart and limits concurrent sessions, seven by default
+own restart and limits concurrent sessions, twelve by default
 (`DEMO_MAX_SESSIONS`).
 
 The manager writes what visitors do to `activity/` beside its state, one JSON
