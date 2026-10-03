@@ -10,7 +10,9 @@ installed globally. During the image build, that CLI performs the same official
 System installation transaction as a user installation, installs every
 official Program with the same CLI, and verifies the resolved System version and
 that exactly the named Programs are installed at exactly their versions. The
-verified result is stored as a local machine seed. First boot extracts that seed
+verified result is stored as a local machine seed. Everything the Programs'
+installation made outside the System, such as a downloaded browser and the
+system libraries it needs, stays in the image itself. First boot extracts that seed
 into the container's writable layer so atomic System updates behave like they
 do on a normal filesystem. No source repository or release is downloaded while
 creating the session, and a visitor finds every Program ready without the

@@ -60,12 +60,17 @@ RUN set -eu; \
       root/.config/phreshos \
       var/lib/phreshos
 
-FROM base
+# The machine keeps everything the Programs' installation made outside the System, such as a
+# browser one downloads or the system libraries it installs. Only the System's own directories are
+# taken back out of the image: they travel in the seed and are written at first boot, above every
+# image layer, so a System update can replace them.
+FROM seeded
 
 ARG SYSTEM_VERSION
 ARG SOURCE_REVISION=unknown
 
-COPY --from=seeded /tmp/phreshos-machine-seed.tar /usr/local/share/phreshos-demo/machine-seed.tar
+RUN mv /tmp/phreshos-machine-seed.tar /usr/local/share/phreshos-demo/machine-seed.tar \
+    && rm -rf /root/.local/share/phreshos/system /root/.config/phreshos /var/lib/phreshos
 COPY source/machine.mjs /usr/local/lib/phreshos-demo/machine.mjs
 COPY source/phresh.mjs /usr/local/lib/phreshos-demo/phresh.mjs
 RUN mkdir -p /usr/local/lib/phreshos-demo/bin \
