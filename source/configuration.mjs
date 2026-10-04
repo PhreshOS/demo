@@ -18,7 +18,7 @@ export function configuration(environment = process.env) {
     lifetimeMilliseconds: integer(environment.DEMO_LIFETIME_MILLISECONDS, 3_600_000, "DEMO_LIFETIME_MILLISECONDS", 60_000),
     // A desktop no browser is connected to ends after this long, so a visitor who left frees it.
     idleMilliseconds: integer(environment.DEMO_IDLE_MILLISECONDS, 600_000, "DEMO_IDLE_MILLISECONDS", 60_000),
-    maxSessions: integer(environment.DEMO_MAX_SESSIONS, 12, "DEMO_MAX_SESSIONS", 1)
+    maxSessions: integer(environment.DEMO_MAX_SESSIONS, 20, "DEMO_MAX_SESSIONS", 1)
   })
 }
 
