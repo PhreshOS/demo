@@ -43,9 +43,10 @@ export function proxyUpgrade(request, socket, head, session) {
     socket.write("\r\n")
     if (targetHead.length) socket.write(targetHead)
     if (head.length) target.write(head)
-    // Either side closing ends the other.
+    // Either side closing or breaking ends the other.
     socket.on("close", () => target.destroy())
     target.on("close", () => socket.destroy())
+    target.on("error", () => socket.destroy())
     socket.pipe(target).pipe(socket)
   })
 

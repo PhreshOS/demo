@@ -44,6 +44,9 @@ const server = http.createServer((request, response) => {
 })
 
 server.on("upgrade", (request, socket, head) => {
+  // A browser that breaks its connection, as a phone changing networks does, ends it here: an
+  // unhandled socket error would end the manager, and with it every visitor's connection.
+  socket.on("error", () => socket.destroy())
   const record = sessions.getByHostname(requestHostname(request.headers.host))
   if (!record || record.status !== "ready") {
     socket.end("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n")
