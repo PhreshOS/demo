@@ -1,4 +1,4 @@
-import { robots, unavailable } from "./pages.mjs"
+import { robots, statsOrigin, unavailable } from "./pages.mjs"
 import { proxyRequest } from "./proxy.mjs"
 import { requestHostname } from "./session-host.mjs"
 import { createToken, sessionCookie, sessionToken } from "./session-token.mjs"
@@ -147,7 +147,8 @@ function send(response, status, body, cookie, scripts = false) {
     "content-type": "text/html; charset=utf-8",
     "content-length": Buffer.byteLength(body),
     "cache-control": "no-store",
-    "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'${scripts ? "; script-src 'self'; connect-src 'self'; img-src data:" : ""}`,
+    // The entry page's script, and the count of its views at stats.phreshos.com.
+    "content-security-policy": `default-src 'none'; style-src 'unsafe-inline'${scripts ? `; script-src 'self' ${statsOrigin}; connect-src 'self' ${statsOrigin}; img-src data:` : ""}`,
     ...(cookie ? { "set-cookie": cookie } : {})
   })
   response.end(body)

@@ -1,3 +1,11 @@
+/**
+ * Where the entry page's views are counted: Umami at stats.phreshos.com, with no cookies and nothing
+ * that names a visitor. Only this page is counted, never a desktop.
+ */
+export const statsOrigin = "https://stats.phreshos.com"
+
+const statsWebsite = "6abb9ce0-53a9-4c3e-85e5-51d48f1b35bc"
+
 /** The entry page: its script starts the desktop and shows its progress. */
 export function demoPage(scriptPath) {
   return `<!doctype html>
@@ -7,6 +15,7 @@ export function demoPage(scriptPath) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>PhreshOS demo</title>
   <style>html,body{height:100%;margin:0}</style>
+  <script defer src="${statsOrigin}/script.js" data-website-id="${statsWebsite}" data-domains="demo.phreshos.com"></script>
 </head>
 <body><div id="demo" style="height:100%"></div><script type="module" src="${scriptPath}"></script></body>
 </html>`
