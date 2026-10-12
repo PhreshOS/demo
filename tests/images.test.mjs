@@ -31,12 +31,15 @@ test("a new release is built, tried as a desktop, and only then becomes current"
     async listImages() { return [{ Id: "old" }, { Id: "new" }] },
     async removeImage(id) { calls.push(["remove", id]) }
   }
-  // Every public `-program` repository with a stable release is an official Program; one without is not yet.
+  // Every public `-program` repository with a stable release is an official Program; one without is not yet,
+  // and an archived one or a fork is not, even with a release.
   const versions = {
     "https://registry.npmjs.org/@phreshos/cli/latest": { version: "0.1.80" },
     "https://api.github.com/repos/PhreshOS/system/releases/latest": { tag_name: "v0.1.103" },
-    "https://api.github.com/orgs/PhreshOS/repos?type=public&per_page=100": [{ name: "system" }, { name: "sprout-program" }, { name: "files-program" }, { name: "draft-program" }],
+    "https://api.github.com/orgs/PhreshOS/repos?type=public&per_page=100": [{ name: "system" }, { name: "sprout-program" }, { name: "files-program" }, { name: "draft-program" }, { name: "retired-program", archived: true }, { name: "copied-program", fork: true }],
     "https://api.github.com/repos/PhreshOS/sprout-program/releases/latest": { tag_name: "v0.1.3" },
+    "https://api.github.com/repos/PhreshOS/retired-program/releases/latest": { tag_name: "v0.4.0" },
+    "https://api.github.com/repos/PhreshOS/copied-program/releases/latest": { tag_name: "v1.0.0" },
     "https://api.github.com/repos/PhreshOS/files-program/releases/latest": { tag_name: "v0.1.4" }
   }
   const fetch = async url => versions[url] ? { ok: true, status: 200, json: async () => versions[url] } : { ok: false, status: 404 }

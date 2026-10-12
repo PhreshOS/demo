@@ -59,7 +59,8 @@ export default class Images {
 
   /**
    * The latest published CLI and System, and every official Program with a stable release: each
-   * public `<identity>-program` repository of the organization. Sprout must be among them.
+   * public `<identity>-program` repository of the organization that is neither archived nor a fork,
+   * as Sprout finds them. Sprout must be among them.
    */
   async latest() {
     const [cli, system, repositories] = await Promise.all([
@@ -67,7 +68,8 @@ export default class Images {
       this.json("https://api.github.com/repos/PhreshOS/system/releases/latest").then(release => version(release.tag_name)),
       this.json("https://api.github.com/orgs/PhreshOS/repos?type=public&per_page=100")
     ])
-    const identities = repositories.map(repository => /^([a-z0-9-]+)-program$/.exec(repository.name)?.[1]).filter(Boolean).sort()
+    const identities = repositories.filter(repository => !repository.archived && !repository.fork)
+      .map(repository => /^([a-z0-9-]+)-program$/.exec(repository.name)?.[1]).filter(Boolean).sort()
     const releases = await Promise.all(identities.map(identity => this.json(`https://api.github.com/repos/PhreshOS/${identity}-program/releases/latest`, true)))
     const programs = Object.fromEntries(identities.flatMap((identity, index) => releases[index] ? [[identity, version(releases[index].tag_name)]] : []))
     if (!programs.sprout) throw new Error("Sprout has no stable release")
